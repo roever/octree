@@ -38,12 +38,12 @@ int main()
   std::swap(array2, array2_2);
 
 
-  int x1, x2, y1, y2, z1, z2;
+  int_fast32_t x1, x2, y1, y2, z1, z2;
 
-  array2.calcBoundingBox(x1, y1, z1, x2, y2, z2); printf("bb %i-%i, %i-%i, %i-%i\n", x1, x2, y1, y2, z1, z2);
-  array4.calcBoundingBox(x1, y1, z1, x2, y2, z2); printf("bb %i-%i, %i-%i, %i-%i\n", x1, x2, y1, y2, z1, z2);
-  array6.calcBoundingBox(x1, y1, z1, x2, y2, z2); printf("bb %i-%i, %i-%i, %i-%i\n", x1, x2, y1, y2, z1, z2);
-  array8.calcBoundingBox(x1, y1, z1, x2, y2, z2); printf("bb %i-%i, %i-%i, %i-%i\n", x1, x2, y1, y2, z1, z2);
+  array2.calcBoundingBox(x1, y1, z1, x2, y2, z2); printf("bb %li-%li, %li-%li, %li-%li\n", x1, x2, y1, y2, z1, z2);
+  array4.calcBoundingBox(x1, y1, z1, x2, y2, z2); printf("bb %li-%li, %li-%li, %li-%li\n", x1, x2, y1, y2, z1, z2);
+  array6.calcBoundingBox(x1, y1, z1, x2, y2, z2); printf("bb %li-%li, %li-%li, %li-%li\n", x1, x2, y1, y2, z1, z2);
+  array8.calcBoundingBox(x1, y1, z1, x2, y2, z2); printf("bb %li-%li, %li-%li, %li-%li\n", x1, x2, y1, y2, z1, z2);
 
   int loops = 1;
 
