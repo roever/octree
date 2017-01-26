@@ -7,6 +7,10 @@
 #include <limits>
 #include <stdexcept>
 
+#if __has_include(<boost/qvm/vec_access.hpp>)
+#include <boost/qvm/vec_access.hpp>
+#endif
+
 template <class I> struct fast_type_for_int;
 
 template <> struct fast_type_for_int<uint8_t>  { using type=uint_fast8_t;  };
@@ -474,6 +478,24 @@ class Sparse3DArray
         // outside of tree, no need to clear things, already clear
       }
     }
+
+#if __has_include(<boost/qvm/vec_access.hpp>)
+    /// like get but you can use any boost qvm valid vector to specify
+    /// the position... TODO if non-integer members in vector round them
+    template <class V>
+    const T & get(const V & v) const noexcept
+    {
+      return get(boost::qvm::X(v), boost::qvm::Y(v), boost::qvm::Z(v));
+    }
+
+    /// like set but you can use any boost qvm valid vector to specify
+    /// the position... TODO if non-integer members in vector round them
+    template <class V>
+    void set(const V & v, const T & val) const noexcept
+    {
+      return set(boost::qvm::X(v), boost::qvm::Y(v), boost::qvm::Z(v), val);
+    }
+#endif
 
     /// call f for each non default value within the space, f must
     /// have 4 arguments, (D x, D y, D z, const T & t) or
