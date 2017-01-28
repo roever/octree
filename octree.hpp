@@ -36,9 +36,13 @@ template <> struct fast_type_for_int<int64_t>  { using type=int_fast64_t;  };
 ///            at the base is always B*B*B elements of T, must be even
 ///            B must be big enough so that the resulting B*B*B instances of T can contain
 ///            one instance of I
-/// \tparam D: type to use for accessing the dimensions
-/// \tparam I: index type used as pointers for leafs and nodes of the tree, if the type is too
-///            small, the array can not contain many non-default values
+/// \tparam D: type to use for accessing the dimensions this limits the maximal dimensions
+///            you can access. It must be a signed type
+/// \tparam I: index type used as pointers for leafs and nodes of the tree. This type and B
+///            defines how many non-default values can be stored. D should be an unsigned type
+///            for maximal range. Assuming M is the maximal value storable in I you can
+///            store between M/8 and M nun default values in the structure
+///            if things run over, an std::runtime_error is thrown
 /// \tparam II: type used internally to represent I, this type should be at least as big as I
 ///             but might be bigger, if that type is faster to handle than I (e.g. use the fast_uintxx_t
 ///             types) The deault for this template parameter automatically gets the fast_int_t type
@@ -59,7 +63,10 @@ class Sparse3DArray
     std::vector<T> leafs;
     // size of the tree, area that is accessible in the 3 dimensions (from -size <= d < size)
     D size;
-    // index of the first empty leaf or zero
+    // index of the first empty leaf or zero empy nodes are handled by having a sinly linked
+    // list of nodes. for nodes the first index in there points to the next
+    // empty node, for leafs a bit of casting is required. That is the reason why
+    // we need B to be big enough
     II firstEmptyLeaf;
     // index of the first empty node or zero
     II firstEmptyNode;
@@ -73,7 +80,7 @@ class Sparse3DArray
       {
         // we have a node in the empty list, so take it from there
         II result = firstEmpty;
-        firstEmpty = *(I*)&c[result];
+        firstEmpty = *reinterpret_cast<I*>(&c[result]);
 
         // reset it to init
         for (II i = 0; i < n; i++)
@@ -96,7 +103,7 @@ class Sparse3DArray
     template <class C>
     void free(II i, C & c, II & firstEmpty) noexcept
     {
-      *(I*)&c[i] = firstEmpty;
+      *reinterpret_cast<I*>(&c[i]) = firstEmpty;
       firstEmpty = i;
     }
 
