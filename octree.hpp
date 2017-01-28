@@ -318,10 +318,16 @@ class Sparse3DArray
       }
       else
       {
-        // leaf level reached, iterate over the content of the leaf
-        for (II i = 0; i < B*B*B; i++)
-          if (leafs[idx+i] != T())
-            f(x+i%B-B/2, y+(i/B)%B-B/2, z+(i/(B*B))-B/2, leafs[idx+i]);
+        II i = 0;
+
+        for (D iz = -B/2; iz < B/2; iz++)
+          for (D iy = -B/2; iy < B/2; iy++)
+            for (D ix = -B/2; ix < B/2; ix++)
+            {
+              if (leafs[idx+i] != T())
+                f(x+ix, y+iy, z+iz, leafs[idx+i]);
+              i++;
+            }
       }
     }
 
