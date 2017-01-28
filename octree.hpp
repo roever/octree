@@ -285,7 +285,7 @@ class Sparse3DArray
           if (nodes[i])
           {
             II n = nodes[i];
-            nodes[i] = nodes[nodes[i]+i^7];
+            nodes[i] = nodes[nodes[i]+(i^7)];
             freeNode(n);
           }
         }
