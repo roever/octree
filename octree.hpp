@@ -402,33 +402,6 @@ class Sparse3DArray
       }
     }
 
-    // free all data of the tree, resetting in the end everything
-    // to default value
-    void recClear(II idx, D size) noexcept
-    {
-      if (size > B)
-      {
-        size /= 2;
-        for (II i = 0; i < 8; i++)
-          if (nodes[idx+i])
-          {
-            recClear(nodes[idx+i], size);
-            freeNode(nodes[idx+i]);
-            nodes[idx+i] = 0;
-          }
-      }
-      else
-      {
-        for (II i = 0; i < 8; i++)
-          if (nodes[idx+i])
-          {
-            freeLeaf(nodes[idx+i]);
-            nodes[idx+i] = 0;
-          }
-      }
-    }
-
-
   public:
 
     /// create an empty array, all values in the 3d-space are default initialized
@@ -553,11 +526,18 @@ class Sparse3DArray
       return xmin <= xmax;
     }
 
-    /// clear everything back to default constructor values. The allocated memory will be kepts though
+    /// clear everything back to default constructor values.
     void clear() noexcept
     {
-      recClear(0, size);
-      merge();
+      nodes.resize(8);
+      nodes[0] = nodes[1] = nodes[2] = nodes[3] =
+        nodes[4] = nodes[5] = nodes[6] = nodes[7] = 0;
+      nodes.shrink_to_fit();
+      leafs.resize(1);
+      leafs.shrink_to_fit();
+      size = B;
+      firstEmptyLeaf = 0;
+      firstEmptyNode = 0;
     }
 };
 
