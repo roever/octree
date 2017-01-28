@@ -6,6 +6,7 @@
 #include <vector>
 #include <limits>
 #include <stdexcept>
+#include <array>
 
 #if __has_include(<boost/qvm/vec_access.hpp>)
 #include <boost/qvm/vec_access.hpp>
@@ -333,57 +334,47 @@ class Sparse3DArray
 
     // recursively calculate the bounding box, it is done by calculating the box for all
     // the children and then assemble the big box out of that information
-    // return true, when bounding box is valid
-    bool recCalcBoundingBox(D & xmin, D & ymin, D & zmin, D & xmax, D & ymax, D & zmax, II idx, D size) const
+    // edges is a bitmask of the edges that need to be found,
+    // cx, cy, zy is the center of the octree, size the size of the cube
+    // the function will change the bounding box in sz according to what is found
+    void recCalcBoundingBox(std::array<D, 6> & sz, D cx, D cy, D cz, II idx, D size) const
     {
-      bool result = false;
+      // allright, this warrants some more explanation, the recursive function enlagen the
+      // given bounding box, if needed, so you need to instantiate it properly
 
-      if (size >= B)
+      // before we start looking though, we have a look at the already found edges, we only
+      // start our search, if we can actually improve them. If the currently found edge is
+      // already beyond the size of the current tree, there is no need to do anything
+      if (   (sz[0] <= cx-size) && (sz[1] >= cx+size-1)
+          && (sz[2] <= cy-size) && (sz[3] >= cy+size-1)
+          && (sz[4] <= cz-size) && (sz[5] >= cz+size-1)
+         )
+      {
+        // if no edge is requested, just do nothing
+        return;
+      }
+      else if (size >= B)
       {
         size /= 2;
 
-        // go over all children
-        for (II i = 0; i < 8; i++)
-          if (nodes[idx+i])
-          {
-            D x1, y1, z1, x2, y2, z2;
+        // calculate the bounding box of the children.
+        // the order of the child sears is done in such a way that we can hope to get close
+        // to the final box very quickly
+        if (nodes[idx+0]) { recCalcBoundingBox(sz, cx-size, cy-size, cz-size, nodes[idx+0], size); }
+        if (nodes[idx+7]) { recCalcBoundingBox(sz, cx+size, cy+size, cz+size, nodes[idx+7], size); }
 
-            // calculate their bounding boxes
-            if (recCalcBoundingBox(x1, y1, z1, x2, y2, z2, nodes[idx+i], size))
-            {
-              // move them to the right position
-              if ((i & 1) == 0) { x1 -= size; x2 -= size; } else { x1 += size; x2 += size; }
-              if ((i & 2) == 0) { y1 -= size; y2 -= size; } else { y1 += size; y2 += size; }
-              if ((i & 4) == 0) { z1 -= size; z2 -= size; } else { z1 += size; z2 += size; }
+        if (nodes[idx+1]) { recCalcBoundingBox(sz, cx+size, cy-size, cz-size, nodes[idx+1], size); }
+        if (nodes[idx+6]) { recCalcBoundingBox(sz, cx-size, cy+size, cz+size, nodes[idx+6], size); }
 
-              // either take over the values, if we don't have our own box, yet
-              // of make our box larger to include child
-              if (!result)
-              {
-                xmin = x1; ymin = y1; zmin = z1;
-                xmax = x2; ymax = y2; zmax = z2;
-                result = true;
-              }
-              else
-              {
-                xmin = std::min(xmin, x1);
-                ymin = std::min(ymin, y1);
-                zmin = std::min(zmin, z1);
+        if (nodes[idx+2]) { recCalcBoundingBox(sz, cx-size, cy+size, cz-size, nodes[idx+2], size); }
+        if (nodes[idx+5]) { recCalcBoundingBox(sz, cx+size, cy-size, cz+size, nodes[idx+5], size); }
 
-                xmax = std::max(xmax, x2);
-                ymax = std::max(ymax, y2);
-                zmax = std::max(zmax, z2);
-              }
-            }
-          }
+        if (nodes[idx+3]) { recCalcBoundingBox(sz, cx+size, cy+size, cz-size, nodes[idx+3], size); }
+        if (nodes[idx+4]) { recCalcBoundingBox(sz, cx-size, cy-size, cz+size, nodes[idx+4], size); }
       }
       else
       {
         // for the leaf iterate over the content
-        xmin = B; xmax = -B;
-        ymin = B; ymax = -B;
-        zmin = B; zmax = -B;
-
         II i = 0;
 
         for (D iz = -B/2; iz < B/2; iz++)
@@ -392,20 +383,16 @@ class Sparse3DArray
             {
               if (leafs[idx+i] != T())
               {
-                xmin = std::min(xmin, ix);
-                xmax = std::max(xmax, ix);
-                ymin = std::min(ymin, iy);
-                ymax = std::max(ymax, iy);
-                zmin = std::min(zmin, iz);
-                zmax = std::max(zmax, iz);
-
-                result = true;
+                sz[0] = std::min(sz[0], cx+ix);
+                sz[1] = std::max(sz[1], cx+ix);
+                sz[2] = std::min(sz[2], cy+iy);
+                sz[3] = std::max(sz[3], cy+iy);
+                sz[4] = std::min(sz[4], cz+iz);
+                sz[5] = std::max(sz[5], cz+iz);
               }
               i++;
             }
       }
-
-      return result;
     }
 
     // free all data of the tree, resetting in the end everything
@@ -543,7 +530,20 @@ class Sparse3DArray
     /// \return true, when the array contains data and the bounding box is value, false if the array is empty
     bool calcBoundingBox(D & xmin, D & ymin, D & zmin, D & xmax, D & ymax, D & zmax) const noexcept
     {
-      return recCalcBoundingBox(xmin, ymin, zmin, xmax, ymax, zmax, 0, size);
+      // initialize the bounding box so that it is empty, the recursive
+      // function below will move the boundary according to what is found
+      std::array<D, 6> sz = { { size, -size, size, -size, size, -size } };
+
+      recCalcBoundingBox(sz, 0, 0, 0, 0, size);
+
+      xmin = sz[0];
+      xmax = sz[1];
+      ymin = sz[2];
+      ymax = sz[3];
+      zmin = sz[4];
+      zmax = sz[5];
+
+      return xmin <= xmax;
     }
 
     /// clear everything back to default constructor values. The allocated memory will be kepts though
