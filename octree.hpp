@@ -346,7 +346,7 @@ class Sparse3DArray
     // the function will change the bounding box in sz according to what is found
     void recCalcBoundingBox(std::array<D, 6> & sz, D cx, D cy, D cz, II idx, D size) const
     {
-      // allright, this warrants some more explanation, the recursive function enlagen the
+      // allright, this warrants some more explanation, the recursive function enlarges the
       // given bounding box, if needed, so you need to instantiate it properly
 
       // before we start looking though, we have a look at the already found edges, we only
