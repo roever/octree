@@ -7,11 +7,13 @@
 #include <limits>
 #include <stdexcept>
 #include <array>
+#include <cmath>
 
 #if __has_include(<boost/qvm/vec_access.hpp>)
 #include <boost/qvm/vec_access.hpp>
 #endif
 
+// a template to get the corresponding fast integer type for an integer type
 template <class I> struct fast_type_for_int;
 
 template <> struct fast_type_for_int<uint8_t>  { using type=uint_fast8_t;  };
@@ -22,6 +24,73 @@ template <> struct fast_type_for_int<uint32_t> { using type=uint_fast32_t; };
 template <> struct fast_type_for_int<int32_t>  { using type=int_fast32_t;  };
 template <> struct fast_type_for_int<uint64_t> { using type=uint_fast64_t; };
 template <> struct fast_type_for_int<int64_t>  { using type=int_fast64_t;  };
+
+// a template to get the proper rounding function for a source and target type
+// target is specified a template parameter, source by overload of the argument
+// integer types are simply cast, floating point values are rounded with
+// the proper function, possible floatingpoint errors, infinity or too big values
+// will lead to undefined return values and a raised std::fetestexcept(FE_INVALID)
+// overflow when casting integers will just occur... you have to check before
+template <class I> struct roundx;
+
+template <> struct roundx<signed char>
+{
+  static signed char r(signed char val) { return static_cast<signed char>(val); }
+  static signed char r(short val)       { return static_cast<signed char>(val); }
+  static signed char r(int val)         { return static_cast<signed char>(val); }
+  static signed char r(long val)        { return static_cast<signed char>(val); }
+  static signed char r(long long val)   { return static_cast<signed char>(val); }
+  static signed char r(float val)       { return static_cast<signed char>(std::lrint(val)); }
+  static signed char r(double val)      { return static_cast<signed char>(std::lrint(val)); }
+  static signed char r(long double val) { return static_cast<signed char>(std::lrint(val)); }
+};
+
+template <> struct roundx<short>
+{
+  static short r(signed char val) { return static_cast<short>(val); }
+  static short r(short val)       { return static_cast<short>(val); }
+  static short r(int val)         { return static_cast<short>(val); }
+  static short r(long val)        { return static_cast<short>(val); }
+  static short r(long long val)   { return static_cast<short>(val); }
+  static short r(float val)       { return static_cast<short>(std::lrint(val)); }
+  static short r(double val)      { return static_cast<short>(std::lrint(val)); }
+  static short r(long double val) { return static_cast<short>(std::lrint(val)); }
+};
+template <> struct roundx<int>
+{
+  static int r(signed char val) { return static_cast<int>(val); }
+  static int r(short val)       { return static_cast<int>(val); }
+  static int r(int val)         { return static_cast<int>(val); }
+  static int r(long val)        { return static_cast<int>(val); }
+  static int r(long long val)   { return static_cast<int>(val); }
+  static int r(float val)       { return static_cast<int>(std::lrint(val)); }
+  static int r(double val)      { return static_cast<int>(std::lrint(val)); }
+  static int r(long double val) { return static_cast<int>(std::lrint(val)); }
+};
+
+template <> struct roundx<long>
+{
+  static long r(signed char val) { return static_cast<long>(val); }
+  static long r(short val)       { return static_cast<long>(val); }
+  static long r(int val)         { return static_cast<long>(val); }
+  static long r(long val)        { return static_cast<long>(val); }
+  static long r(long long val)   { return static_cast<long>(val); }
+  static long r(float val)       { return std::lrint(val); }
+  static long r(double val)      { return std::lrint(val); }
+  static long r(long double val) { return std::lrint(val); }
+};
+
+template <> struct roundx<long long>
+{
+  static long long r(signed char val) { return static_cast<long long>(val); }
+  static long long r(short val)       { return static_cast<long long>(val); }
+  static long long r(int val)         { return static_cast<long long>(val); }
+  static long long r(long val)        { return static_cast<long long>(val); }
+  static long long r(long long val)   { return static_cast<long long>(val); }
+  static long long r(float val)       { return std::llrint(val); }
+  static long long r(double val)      { return std::llrint(val); }
+  static long long r(long double val) { return std::llrint(val); }
+};
 
 /// Implement a 3d-array. The array is self-growing and can potentially
 /// contain all int-adressable 3d-coordinates. The array contains elements
@@ -493,19 +562,19 @@ class Sparse3DArray
 
 #if __has_include(<boost/qvm/vec_access.hpp>)
     /// like get but you can use any boost qvm valid vector to specify
-    /// the position... TODO if non-integer members in vector round them
+    /// the position...
     template <class V>
     const T & get(const V & v) const noexcept
     {
-      return get(boost::qvm::X(v), boost::qvm::Y(v), boost::qvm::Z(v));
+      return get(roundx<D>::r(boost::qvm::X(v)), roundx<D>::r(boost::qvm::Y(v)), roundx<D>::r(boost::qvm::Z(v)));
     }
 
     /// like set but you can use any boost qvm valid vector to specify
-    /// the position... TODO if non-integer members in vector round them
+    /// the position...
     template <class V>
-    void set(const V & v, const T & val) const noexcept
+    void set(const V & v, const T & val)
     {
-      return set(boost::qvm::X(v), boost::qvm::Y(v), boost::qvm::Z(v), val);
+      return set(roundx<D>::r(boost::qvm::X(v)), roundx<D>::r(boost::qvm::Y(v)), roundx<D>::r(boost::qvm::Z(v)), val);
     }
 #endif
 
