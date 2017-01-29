@@ -130,19 +130,19 @@ class Sparse3DArray
     // the inside nodes of the octree always 8 consecutive indices are the children of one node
     // the first node with index 0 is always the root node, which will never be freed
     // making the minimal size of the tree B (from -B <= d < B is accessible)
-    std::vector<I> nodes;
+    std::vector<I> nodes_;
     // the leaf nodes of the octree always B*B*B consecutive entries create one leaf node,
     // entry 0 is the empty value
-    std::vector<T> leafs;
+    std::vector<T> leafs_;
     // size of the tree, area that is accessible in the 3 dimensions (from -size <= d < size)
-    D size;
+    D size_;
     // index of the first empty leaf or zero empy nodes are handled by having a sinly linked
     // list of nodes. for nodes the first index in there points to the next
     // empty node, for leafs a bit of casting is required. That is the reason why
     // we need B to be big enough
-    II firstEmptyLeaf;
+    II firstEmptyLeaf_;
     // index of the first empty node or zero
-    II firstEmptyNode;
+    II firstEmptyNode_;
 
     // function to allocate a leaf or a node, the returned value will always be initialiazed
     // to init
@@ -181,16 +181,16 @@ class Sparse3DArray
     }
 
     // functions to allocate and free the nodes and leafs
-    II allocLeaf() { return alloc(leafs, firstEmptyLeaf, B*B*B, T()); }
-    II allocNode() { return alloc(nodes, firstEmptyNode, 8, 0); }
+    II allocLeaf() { return alloc(leafs_, firstEmptyLeaf_, B*B*B, T()); }
+    II allocNode() { return alloc(nodes_, firstEmptyNode_, 8, 0); }
 
-    void freeLeaf(II i) noexcept { free(i, leafs, firstEmptyLeaf); }
-    void freeNode(II i) noexcept { free(i, nodes, firstEmptyNode); }
+    void freeLeaf(II i) noexcept { free(i, leafs_, firstEmptyLeaf_); }
+    void freeNode(II i) noexcept { free(i, nodes_, firstEmptyNode_); }
 
     // check, if (x, y, z) is inside the current size of the tree
     bool inside(D x, D y, D z) const noexcept
     {
-      return -size <= x && x < size && -size <= y && y < size && -size <= z && z < size;
+      return -size_ <= x && x < size_ && -size_ <= y && y < size_ && -size_ <= z && z < size_;
     }
 
     // calculate the index into the leaf node, assuming the given
@@ -223,14 +223,14 @@ class Sparse3DArray
       {
         idx = nodeIdx(idx, x, y, z, size);
 
-        if (nodes[idx])
-          return recGet(x, y, z, nodes[idx], size);
+        if (nodes_[idx])
+          return recGet(x, y, z, nodes_[idx], size);
         else
-          return leafs[0];
+          return leafs_[0];
       }
       else
       {
-        return leafs[idx+leafIdx(x, y, z)];
+        return leafs_[idx+leafIdx(x, y, z)];
       }
     }
 
@@ -243,21 +243,21 @@ class Sparse3DArray
       {
         idx = nodeIdx(idx, x, y, z, size);
 
-        if (!nodes[idx])
+        if (!nodes_[idx])
         {
           // big oups here, if we assign directly without going over i, we get a race
           // because allocNode might resize the nodes container and the left side of the
           // assignment might be invalidated leading to an access into heap memory that had
           // been freed...
           II i = (size >= B) ? allocNode() : allocLeaf();
-          nodes[idx] = i;
+          nodes_[idx] = i;
         }
 
-        recSet(x, y, z, nodes[idx], size, val);
+        recSet(x, y, z, nodes_[idx], size, val);
       }
       else
       {
-        leafs[idx+leafIdx(x, y, z)] = val;
+        leafs_[idx+leafIdx(x, y, z)] = val;
       }
     }
 
@@ -273,16 +273,16 @@ class Sparse3DArray
       {
         II idx2 = nodeIdx(idx, x, y, z, size);
 
-        if (nodes[idx2])
+        if (nodes_[idx2])
         {
           // reset the child
-          if (recReset(x, y, z, nodes[idx2], size))
+          if (recReset(x, y, z, nodes_[idx2], size))
           {
             // child has been cleared... so remove the pointer and check
             // if the complete node is now empty
-            nodes[idx2] = 0;
+            nodes_[idx2] = 0;
             for (II i = 0; i < 8; i++)
-              if (nodes[idx+i])
+              if (nodes_[idx+i])
                 return false;
 
             // if so, and the node is not root, free it
@@ -308,13 +308,13 @@ class Sparse3DArray
       else
       {
         II idx2 = idx + leafIdx(x, y, z);
-        if (leafs[idx2] != T())
+        if (leafs_[idx2] != T())
         {
           // the value is not clear, so clear is and check if the leaf
           // is now completely empty, if so free it and tell the caller
-          leafs[idx2] = T();
+          leafs_[idx2] = T();
           for (II i = 0; i < B*B*B; i++)
-            if (leafs[idx+i] != T())
+            if (leafs_[idx+i] != T())
               return false;
 
           freeLeaf(idx);
@@ -332,46 +332,46 @@ class Sparse3DArray
     void split(void)
     {
       for (II i = 0; i < 8; i++)
-        if (nodes[i])
+        if (nodes_[i])
         {
           II n = allocNode();
           // the xor 7 will invert the lowest 3 bits in practice giving
           // us the index of the opposite subtree of the node
-          nodes[n+(i^7)] = nodes[i];
-          nodes[i] = n;
+          nodes_[n+(i^7)] = nodes_[i];
+          nodes_[i] = n;
         }
 
-      size *= 2;
+      size_ *= 2;
     }
 
     // try to remove as many levels as possible from the octree without
     // loosing information
     void merge(void) noexcept
     {
-      while (size > B)
+      while (size_ > B)
       {
         // first check, whether the outer layer subtrees are all empty
         // if not leave the function, there is nothing we can do
         for (II i = 0; i < 8; i++)
-          if (nodes[i])
+          if (nodes_[i])
             for (II j = 0; j < 8; j++)
               if ((i^7) != j)
-                if (nodes[nodes[i]+j])
+                if (nodes_[nodes_[i]+j])
                   return;
 
         // outer layers are empty, drop one level
         for (II i = 0; i < 8; i++)
         {
-          if (nodes[i])
+          if (nodes_[i])
           {
-            II n = nodes[i];
-            nodes[i] = nodes[nodes[i]+(i^7)];
+            II n = nodes_[i];
+            nodes_[i] = nodes_[nodes_[i]+(i^7)];
             freeNode(n);
           }
         }
 
         // accessible size has been halfed
-        size /= 2;
+        size_ /= 2;
       }
     }
 
@@ -388,14 +388,14 @@ class Sparse3DArray
       {
         size /= 2;
         // check all 8 children and recursively call function, if they are occupied
-        if (nodes[idx+0]) recForEach(f, x-size, y-size, z-size, nodes[idx+0], size);
-        if (nodes[idx+1]) recForEach(f, x+size, y-size, z-size, nodes[idx+1], size);
-        if (nodes[idx+2]) recForEach(f, x-size, y+size, z-size, nodes[idx+2], size);
-        if (nodes[idx+3]) recForEach(f, x+size, y+size, z-size, nodes[idx+3], size);
-        if (nodes[idx+4]) recForEach(f, x-size, y-size, z+size, nodes[idx+4], size);
-        if (nodes[idx+5]) recForEach(f, x+size, y-size, z+size, nodes[idx+5], size);
-        if (nodes[idx+6]) recForEach(f, x-size, y+size, z+size, nodes[idx+6], size);
-        if (nodes[idx+7]) recForEach(f, x+size, y+size, z+size, nodes[idx+7], size);
+        if (nodes_[idx+0]) recForEach(f, x-size, y-size, z-size, nodes_[idx+0], size);
+        if (nodes_[idx+1]) recForEach(f, x+size, y-size, z-size, nodes_[idx+1], size);
+        if (nodes_[idx+2]) recForEach(f, x-size, y+size, z-size, nodes_[idx+2], size);
+        if (nodes_[idx+3]) recForEach(f, x+size, y+size, z-size, nodes_[idx+3], size);
+        if (nodes_[idx+4]) recForEach(f, x-size, y-size, z+size, nodes_[idx+4], size);
+        if (nodes_[idx+5]) recForEach(f, x+size, y-size, z+size, nodes_[idx+5], size);
+        if (nodes_[idx+6]) recForEach(f, x-size, y+size, z+size, nodes_[idx+6], size);
+        if (nodes_[idx+7]) recForEach(f, x+size, y+size, z+size, nodes_[idx+7], size);
       }
       else
       {
@@ -405,8 +405,8 @@ class Sparse3DArray
           for (D iy = -B/2; iy < B/2; iy++)
             for (D ix = -B/2; ix < B/2; ix++)
             {
-              if (leafs[idx+i] != T())
-                f(x+ix, y+iy, z+iz, leafs[idx+i]);
+              if (leafs_[idx+i] != T())
+                f(x+ix, y+iy, z+iz, leafs_[idx+i]);
               i++;
             }
       }
@@ -440,17 +440,17 @@ class Sparse3DArray
         // calculate the bounding box of the children.
         // the order of the child sears is done in such a way that we can hope to get close
         // to the final box very quickly
-        if (nodes[idx+0]) { recCalcBoundingBox(sz, cx-size, cy-size, cz-size, nodes[idx+0], size); }
-        if (nodes[idx+7]) { recCalcBoundingBox(sz, cx+size, cy+size, cz+size, nodes[idx+7], size); }
+        if (nodes_[idx+0]) { recCalcBoundingBox(sz, cx-size, cy-size, cz-size, nodes_[idx+0], size); }
+        if (nodes_[idx+7]) { recCalcBoundingBox(sz, cx+size, cy+size, cz+size, nodes_[idx+7], size); }
 
-        if (nodes[idx+1]) { recCalcBoundingBox(sz, cx+size, cy-size, cz-size, nodes[idx+1], size); }
-        if (nodes[idx+6]) { recCalcBoundingBox(sz, cx-size, cy+size, cz+size, nodes[idx+6], size); }
+        if (nodes_[idx+1]) { recCalcBoundingBox(sz, cx+size, cy-size, cz-size, nodes_[idx+1], size); }
+        if (nodes_[idx+6]) { recCalcBoundingBox(sz, cx-size, cy+size, cz+size, nodes_[idx+6], size); }
 
-        if (nodes[idx+2]) { recCalcBoundingBox(sz, cx-size, cy+size, cz-size, nodes[idx+2], size); }
-        if (nodes[idx+5]) { recCalcBoundingBox(sz, cx+size, cy-size, cz+size, nodes[idx+5], size); }
+        if (nodes_[idx+2]) { recCalcBoundingBox(sz, cx-size, cy+size, cz-size, nodes_[idx+2], size); }
+        if (nodes_[idx+5]) { recCalcBoundingBox(sz, cx+size, cy-size, cz+size, nodes_[idx+5], size); }
 
-        if (nodes[idx+3]) { recCalcBoundingBox(sz, cx+size, cy+size, cz-size, nodes[idx+3], size); }
-        if (nodes[idx+4]) { recCalcBoundingBox(sz, cx-size, cy-size, cz+size, nodes[idx+4], size); }
+        if (nodes_[idx+3]) { recCalcBoundingBox(sz, cx+size, cy+size, cz-size, nodes_[idx+3], size); }
+        if (nodes_[idx+4]) { recCalcBoundingBox(sz, cx-size, cy-size, cz+size, nodes_[idx+4], size); }
       }
       else
       {
@@ -461,7 +461,7 @@ class Sparse3DArray
           for (D iy = -B/2; iy < B/2; iy++)
             for (D ix = -B/2; ix < B/2; ix++)
             {
-              if (leafs[idx+i] != T())
+              if (leafs_[idx+i] != T())
               {
                 sz[0] = std::min(sz[0], cx+ix);
                 sz[1] = std::max(sz[1], cx+ix);
@@ -478,17 +478,17 @@ class Sparse3DArray
   public:
 
     /// create an empty array, all values in the 3d-space are default initialized
-    Sparse3DArray() : nodes(8), leafs(1), size(B), firstEmptyLeaf(0), firstEmptyNode(0) { }
+    Sparse3DArray() : nodes_(8), leafs_(1), size_(B), firstEmptyLeaf_(0), firstEmptyNode_(0) { }
 
     // copy constructor
     Sparse3DArray(const Sparse3DArray & orig) :
-      nodes(orig.nodes), leafs(orig.leafs), size(orig.size),
-      firstEmptyLeaf(orig.firstEmptyLeaf), firstEmptyNode(orig.firstEmptyNode) { }
+      nodes_(orig.nodes_), leafs_(orig.leafs_), size_(orig.size_),
+      firstEmptyLeaf_(orig.firstEmptyLeaf_), firstEmptyNode_(orig.firstEmptyNode_) { }
 
     // move constructor
     Sparse3DArray(Sparse3DArray && orig) :
-      nodes(std::move(orig.nodes)), leafs(std::move(orig.leafs)), size(orig.size),
-      firstEmptyLeaf(orig.firstEmptyLeaf), firstEmptyNode(orig.firstEmptyNode)
+      nodes_(std::move(orig.nodes_)), leafs_(std::move(orig.leafs_)), size_(orig.size_),
+      firstEmptyLeaf_(orig.firstEmptyLeaf_), firstEmptyNode_(orig.firstEmptyNode_)
     {
       // we need to clear orig afterward to leave that object
       // in a valid state...
@@ -500,11 +500,11 @@ class Sparse3DArray
     {
       if (this != &other)
       {
-        nodes = other.nodes;
-        leafs = other.leafs;
-        size = other.size;
-        firstEmptyLeaf = other.firstEmptyLeaf;
-        firstEmptyNode = other.firstEmptyNode;
+        nodes_ = other.nodes_;
+        leafs_ = other.leafs_;
+        size_ = other.size_;
+        firstEmptyLeaf_ = other.firstEmptyLeaf_;
+        firstEmptyNode_ = other.firstEmptyNode_;
       }
 
       return *this;
@@ -512,11 +512,11 @@ class Sparse3DArray
 
     Sparse3DArray & operator=(Sparse3DArray && other) noexcept
     {
-      std::swap(nodes, other.nodes);
-      std::swap(leafs, other.leafs);
-      std::swap(size, other.size);
-      std::swap(firstEmptyLeaf, other.firstEmptyLeaf);
-      std::swap(firstEmptyNode, other.firstEmptyNode);
+      std::swap(nodes_, other.nodes_);
+      std::swap(leafs_, other.leafs_);
+      std::swap(size_, other.size_);
+      std::swap(firstEmptyLeaf_, other.firstEmptyLeaf_);
+      std::swap(firstEmptyNode_, other.firstEmptyNode_);
 
       return *this;
     }
@@ -528,9 +528,9 @@ class Sparse3DArray
     const T & get(D x, D y, D z) const noexcept
     {
       if (inside(x, y, z))
-        return recGet(x, y, z, 0, size);
+        return recGet(x, y, z, 0, size_);
       else
-        return leafs[0];
+        return leafs_[0];
     }
 
     /// set a value, a copy is stored at the given position
@@ -541,7 +541,7 @@ class Sparse3DArray
       if (val != T())
       {
         while (!inside(x, y, z)) { split(); }
-        recSet(x, y, z, 0, size, val);
+        recSet(x, y, z, 0, size_, val);
       }
       else if (inside(x, y, z))
       {
@@ -551,7 +551,7 @@ class Sparse3DArray
         // in the root node we try to merge. This is conservative
         // because we might be able to merge sooner, but that is not
         // that easy to find out
-        if (recReset(x, y, z, 0, size))
+        if (recReset(x, y, z, 0, size_))
           merge();
       }
       else
@@ -594,18 +594,18 @@ class Sparse3DArray
     void for_each(F f) const
 #endif
     {
-      recForEach(f, 0, 0, 0, 0, size);
+      recForEach(f, 0, 0, 0, 0, size_);
     }
 
     /// swap two array
     /// \param a the array to swap with
     void swap(Sparse3DArray & a) noexcept(noexcept(std::swap<std::vector<T>>) && noexcept(std::swap<std::vector<I>>))
     {
-      std::swap(nodes, a.nodes);
-      std::swap(leafs, a.leafs);
-      std::swap(size, a.size);
-      std::swap(firstEmptyLeaf, a.firstEmptyLeaf);
-      std::swap(firstEmptyNode, a.firstEmptyNode);
+      std::swap(nodes_, a.nodes_);
+      std::swap(leafs_, a.leafs_);
+      std::swap(size_, a.size_);
+      std::swap(firstEmptyLeaf_, a.firstEmptyLeaf_);
+      std::swap(firstEmptyNode_, a.firstEmptyNode_);
     }
 
     /// calculate the bounding box
@@ -620,9 +620,9 @@ class Sparse3DArray
     {
       // initialize the bounding box so that it is empty, the recursive
       // function below will move the boundary according to what is found
-      std::array<D, 6> sz = { { size, -size, size, -size, size, -size } };
+      std::array<D, 6> sz = { { size_, -size_, size_, -size_, size_, -size_ } };
 
-      recCalcBoundingBox(sz, 0, 0, 0, 0, size);
+      recCalcBoundingBox(sz, 0, 0, 0, 0, size_);
 
       xmin = sz[0];
       xmax = sz[1];
@@ -637,15 +637,14 @@ class Sparse3DArray
     /// clear everything back to default constructor values.
     void clear() noexcept
     {
-      nodes.resize(8);
-      nodes[0] = nodes[1] = nodes[2] = nodes[3] =
-        nodes[4] = nodes[5] = nodes[6] = nodes[7] = 0;
-      nodes.shrink_to_fit();
-      leafs.resize(1);
-      leafs.shrink_to_fit();
-      size = B;
-      firstEmptyLeaf = 0;
-      firstEmptyNode = 0;
+      nodes_.resize(8);
+      nodes_[0] = nodes_[1] = nodes_[2] = nodes_[3] =
+        nodes_[4] = nodes_[5] = nodes_[6] = nodes_[7] = 0;
+      nodes_.shrink_to_fit();
+      leafs_.resize(1);
+      leafs_.shrink_to_fit();
+      size_ = B;
+      firstEmptyLeaf_ = 0;
+      firstEmptyNode_ = 0;
     }
 };
-
