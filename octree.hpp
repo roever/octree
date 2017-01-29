@@ -51,6 +51,10 @@ template<class T, int B=2, class D=int_fast32_t, class I=uint32_t, class II=type
 class Sparse3DArray
 {
   private:
+
+    static_assert((B % 2) == 0, "B must be even");
+    static_assert(sizeof(T)*B*B*B >= sizeof(I), "B must be big enough to fit an index into a leaf");
+
     // the datatype used to indes into the nodes and leafs vectors
     using index_type=I;
 
@@ -405,12 +409,47 @@ class Sparse3DArray
   public:
 
     /// create an empty array, all values in the 3d-space are default initialized
-    Sparse3DArray() : size(B), firstEmptyLeaf(0), firstEmptyNode(0)
+    Sparse3DArray() : nodes(8), leafs(1), size(B), firstEmptyLeaf(0), firstEmptyNode(0) { }
+
+    // copy constructor
+    Sparse3DArray(const Sparse3DArray & orig) :
+      nodes(orig.nodes), leafs(orig.leafs), size(orig.size),
+      firstEmptyLeaf(orig.firstEmptyLeaf), firstEmptyNode(orig.firstEmptyNode) { }
+
+    // move constructor
+    Sparse3DArray(Sparse3DArray && orig) :
+      nodes(std::move(orig.nodes)), leafs(std::move(orig.leafs)), size(orig.size),
+      firstEmptyLeaf(orig.firstEmptyLeaf), firstEmptyNode(orig.firstEmptyNode)
     {
-      static_assert((B % 2) == 0, "B must be even");
-      static_assert(sizeof(T)*B*B*B >= sizeof(I), "B must be big enough to fit an index into a leaf");
-      nodes.resize(8);
-      leafs.resize(1);
+      // we need to clear orig afterward to leave that object
+      // in a valid state...
+      orig.clear();
+    }
+
+    // assignment operators
+    Sparse3DArray & operator=(const Sparse3DArray & other)
+    {
+      if (this != &other)
+      {
+        nodes = other.nodes;
+        leafs = other.leafs;
+        size = other.size;
+        firstEmptyLeaf = other.firstEmptyLeaf;
+        firstEmptyNode = other.firstEmptyNode;
+      }
+
+      return *this;
+    }
+
+    Sparse3DArray & operator=(Sparse3DArray && other) noexcept
+    {
+      std::swap(nodes, other.nodes);
+      std::swap(leafs, other.leafs);
+      std::swap(size, other.size);
+      std::swap(firstEmptyLeaf, other.firstEmptyLeaf);
+      std::swap(firstEmptyNode, other.firstEmptyNode);
+
+      return *this;
     }
 
     /// get the value of an entry at the given position
