@@ -123,6 +123,7 @@ class Sparse3DArray
 
     static_assert((B % 2) == 0, "B must be even");
     static_assert(sizeof(T)*B*B*B >= sizeof(I), "B must be big enough to fit an index into a leaf");
+    static_assert(std::numeric_limits<D>::is_signed, "D must be a signed integer");
 
     // the datatype used to indes into the nodes and leafs vectors
     using index_type=I;
